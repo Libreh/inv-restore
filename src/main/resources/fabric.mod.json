@@ -19,6 +19,7 @@
   "mixins": [
     "invrestore.mixins.json"
   ],
+  "accessWidener" : "invrestore.accesswidener",
   "depends": {
     "fabric-permissions-api-v0": "*",
     "fabricloader": ">=${loader_version}",
