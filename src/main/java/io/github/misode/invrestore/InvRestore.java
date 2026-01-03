@@ -10,12 +10,17 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.component.CustomData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -26,6 +31,14 @@ public class InvRestore implements ModInitializer {
 
     private static InvRestoreDatabase database;
     public static InvRestoreConfig config = InvRestoreConfig.DEFAULT;
+
+    public static void markEntity(UUID uuid, Entity entity) {
+        if (entity == null) return;
+
+        CompoundTag nbt = new CompoundTag();
+        nbt.putString("player", uuid.toString());
+        entity.setComponent(DataComponents.CUSTOM_DATA, CustomData.of(nbt));
+    }
 
     @Override
     public void onInitialize() {

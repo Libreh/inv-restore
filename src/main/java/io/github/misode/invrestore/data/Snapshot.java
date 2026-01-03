@@ -7,30 +7,43 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.misode.invrestore.InvRestore;
 import io.github.misode.invrestore.RandomBase62;
 import io.github.misode.invrestore.Styles;
+import net.minecraft.commands.CommandSource;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.NonNullList;
 import net.minecraft.core.Registry;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.PlayerAdvancements;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.*;
 import net.minecraft.util.ExtraCodecs;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.food.FoodData;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeManager;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
+import oshi.util.tuples.Pair;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Locale;
-import java.util.UUID;
+import java.util.*;
 
-public record Snapshot(String id, Event event, UUID playerUuid, String playerName, Instant time, ResourceKey<Level> dimension, Vec3 position, SnapshotItems contents) implements Comparable<Snapshot> {
+public record Snapshot(String id, Event event, UUID playerUuid, String playerName, Instant time, ResourceKey<Level> dimension, Vec3 position, SnapshotItems contents, float health, Hunger hunger, Experience xp, List<MobEffectInstance> effects, PlayerAdvancements.Data advancements, List<ResourceKey<Recipe<?>>> recipes, Map<Stat<?>, Integer> stats) implements Comparable<Snapshot> {
     public static final Codec<Snapshot> CODEC = RecordCodecBuilder.create(b -> b.group(
             Codec.STRING.fieldOf("id").forGetter(Snapshot::id),
             Event.CODEC.fieldOf("event").forGetter(Snapshot::event),
@@ -39,7 +52,14 @@ public record Snapshot(String id, Event event, UUID playerUuid, String playerNam
             ExtraCodecs.INSTANT_ISO8601.fieldOf("time").forGetter(Snapshot::time),
             Level.RESOURCE_KEY_CODEC.fieldOf("dimension").forGetter(Snapshot::dimension),
             Vec3.CODEC.fieldOf("position").forGetter(Snapshot::position),
-            SnapshotItems.CODEC.fieldOf("contents").forGetter(Snapshot::contents)
+            SnapshotItems.CODEC.fieldOf("contents").forGetter(Snapshot::contents),
+            Codec.FLOAT.fieldOf("health").forGetter(Snapshot::health),
+            Hunger.CODEC.fieldOf("hunger").forGetter(Snapshot::hunger),
+            Experience.CODEC.fieldOf("xp").forGetter(Snapshot::xp),
+            effectListCodec().fieldOf("effects").forGetter(Snapshot::effects),
+            PlayerAdvancements.Data.CODEC.fieldOf("advancements").forGetter(Snapshot::advancements),
+            Recipe.KEY_CODEC.listOf().fieldOf("recipes").forGetter(Snapshot::recipes),
+            ServerStatsCounter.STATS_CODEC.fieldOf("stats").forGetter(Snapshot::stats)
     ).apply(b, Snapshot::new));
 
     public static Snapshot create(ServerPlayer player, Event event) {
@@ -47,7 +67,52 @@ public record Snapshot(String id, Event event, UUID playerUuid, String playerNam
         UUID playerUuid = player.getUUID();
         String playerName = player.getGameProfile().getName();
         SnapshotItems contents = SnapshotItems.fromPlayer(player);
-        return new Snapshot(id, event, playerUuid, playerName, Instant.now(), player.level().dimension(), player.position(), contents);
+        float health = player.getHealth();
+        FoodData foodData = player.getFoodData();
+        Hunger hunger = new Hunger(foodData.getFoodLevel(), foodData.getSaturationLevel());
+        Experience xp = new Experience(Mth.floor(player.experienceProgress * player.getXpNeededForNextLevel()), player.experienceLevel);
+        List<MobEffectInstance> effects = player.getActiveEffects().stream().toList();
+        for (var effect : effects) {
+            InvRestore.LOGGER.info("effect: {}, amplifier: {}, duration: {}", effect.getEffect(), effect.getDuration(), effect.getAmplifier());
+        }
+        PlayerAdvancements.Data advancements = player.getAdvancements().asData();
+        ServerRecipeBook.Packed recipeBook = player.getRecipeBook().pack();
+        List<ResourceKey<Recipe<?>>> recipes = recipeBook.known();
+        Map<Stat<?>, Integer> statsMap = new HashMap<>();
+        Registry<StatType<?>> statTypeRegistry = BuiltInRegistries.STAT_TYPE;
+        statTypeRegistry.forEach(statType -> {
+            Registry<?> registry = statType.getRegistry();
+            registry.keySet().forEach(resourceLocation -> {
+                Object value = registry.getValue(resourceLocation);
+                Pair<Stat<?>, Integer> stat = createTypedStat(statType, value, player.getStats());
+                if (stat != null) {
+                    statsMap.put(stat.getA(), stat.getB());
+                }
+            });
+        });
+        return new Snapshot(id, event, playerUuid, playerName, Instant.now(), player.level().dimension(), player.position(), contents, health, hunger, xp, effects, advancements, recipes, statsMap);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> Pair<Stat<?>, Integer> createTypedStat(StatType<T> statType, Object value, StatsCounter statsCounter) {
+        T typedValue = (T) value;
+        Stat<T> stat = statType.get(typedValue);
+        int statInt = statsCounter.getValue(stat);
+        if (statInt != 0) {
+            return new Pair<>(stat, statInt);
+        }
+        return null;
+    }
+
+    private static Codec<List<MobEffectInstance>> effectListCodec() {
+        return MobEffectInstance.CODEC.listOf().orElse(List.of()).xmap(effect -> {
+            List<MobEffectInstance> effects = NonNullList.create();
+            effects.addAll(effect);
+            return effects;
+        }, mobEffects -> {
+            List<MobEffectInstance> effects = new ArrayList<>(mobEffects);
+            return effects;
+        });
     }
 
     public static Snapshot fromDeath(ServerPlayer player, DamageSource source) {
@@ -89,6 +154,127 @@ public record Snapshot(String id, Event event, UUID playerUuid, String playerNam
         DecimalFormat f = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ROOT));
         return f.format(this.position.x) + " " + f.format(this.position.y) + " " + f.format(this.position.z);
     }
+
+    public void restoreEverything(ServerPlayer player) {
+        this.restorePosition(player);
+        this.restoreExperience(player);
+        this.restoreSaturation(player);
+        this.restoreFood(player);
+        this.restoreHealth(player);
+        this.restoreEffects(player);
+        this.restoreAdvancements(player);
+        this.restoreRecipes(player);
+        this.restoreStats(player);
+    }
+
+    public void restorePosition(ServerPlayer player) {
+        killNearbyItemXp(player);
+
+        player.teleportTo(
+                player.level().getServer().getLevel(this.dimension()),
+                this.position().x, this.position().y, this.position().z,
+                Set.of(),
+                player.getYRot(), player.getXRot(),
+                false
+        );
+    }
+
+    private void killNearbyItemXp(ServerPlayer player) {
+        var server = player.level().getServer();
+        var serverLevel = player.level();
+        var commandSourceStack = new CommandSourceStack(
+                CommandSource.NULL,
+                Vec3.atLowerCornerOf(serverLevel.getSharedSpawnPos()),
+                Vec2.ZERO,
+                serverLevel,
+                3,
+                "Server",
+                Component.literal("Server"),
+                server,
+                player
+        );
+
+        double x = position.x;
+        double y = position.y;
+        double z = position.z;
+
+        String itemArgument = "@e[type=item,distance=..15,x=%s,y=%s,z=%s]".formatted(x, y, z);
+        server.getCommands().performPrefixedCommand(commandSourceStack,
+                "/kill " + itemArgument
+        );
+
+        String xpArgument = "@e[type=experience_orb,distance=..15,x=%s,y=%s,z=%s]".formatted(x, y, z);
+        server.getCommands().performPrefixedCommand(commandSourceStack,
+                "/kill " + xpArgument
+        );
+    }
+
+    public void restoreExperience(ServerPlayer player) {
+        player.setExperienceLevels(this.xp().levels());
+        player.setExperiencePoints((int) this.xp().points());
+    }
+
+    public void restoreSaturation(ServerPlayer player) {
+        player.getFoodData().setSaturation(this.hunger().saturation());
+    }
+
+    public void restoreFood(ServerPlayer player) {
+        player.getFoodData().setFoodLevel(this.hunger().food());
+    }
+
+    public void restoreHealth(ServerPlayer player) {
+        if (this.health() != 0.0f) {
+            player.setHealth(this.health());
+        }
+    }
+
+    private void restoreEffects(ServerPlayer player) {
+        player.removeAllEffects();
+        for (var effect : effects) {
+            player.addEffect(effect);
+        }
+    }
+
+    private void restoreAdvancements(ServerPlayer player) {
+        player.getAdvancements().applyFrom(player.level().getServer().getAdvancements(), advancements);
+    }
+
+    private void restoreRecipes(ServerPlayer player) {
+        RecipeManager recipeManager = player.level().getServer().getRecipeManager();
+        player.getRecipeBook().removeRecipes(recipeManager.getRecipes(), player);
+        Collection<RecipeHolder<?>> recipeHolders = new ArrayList<>();
+        recipes.forEach(recipeKey -> recipeHolders.add(recipeManager.byKey(recipeKey).get()));
+        player.getRecipeBook().addRecipes(recipeHolders, player);
+    }
+
+    private void restoreStats(ServerPlayer player) {
+        for (var stat : BuiltInRegistries.STAT_TYPE) {
+            resetStatsForType(player, stat);
+        }
+        for (Map.Entry<Stat<?>, Integer> stat : stats.entrySet()) {
+            player.awardStat(stat.getKey(), stat.getValue());
+        }
+    }
+
+    private <T> void resetStatsForType(ServerPlayer player, StatType<T> statType) {
+        Registry<T> registry = statType.getRegistry();
+        for (ResourceLocation id : registry.keySet()) {
+            T entry = registry.getValue(id);
+            if (entry != null) {
+                player.resetStat(statType.get(entry));
+            }
+        }
+    }
+
+//    public String formatHunger() {
+//        DecimalFormat f = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ROOT));
+//        return this.hunger.food() + " " + f.format(this.hunger.saturation());
+//    }
+//
+//    public String formatXp() {
+//        DecimalFormat f = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ROOT));
+//        return f.format(this.xp.points()) + " " + this.xp.levels();
+//    }
 
     public interface Event {
         EventType<?> getType();
