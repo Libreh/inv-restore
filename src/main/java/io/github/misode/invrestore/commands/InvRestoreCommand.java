@@ -10,6 +10,7 @@ import io.github.misode.invrestore.Styles;
 import io.github.misode.invrestore.config.InvRestoreConfig;
 import io.github.misode.invrestore.data.Snapshot;
 import io.github.misode.invrestore.gui.SnapshotGui;
+import io.github.misode.invrestore.util.CommandContext;
 import me.lucko.fabric.api.permissions.v0.Permissions;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -29,7 +30,9 @@ import net.minecraft.world.item.component.ItemLore;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
@@ -63,6 +66,40 @@ public class InvRestoreCommand {
                         .then(argument("zone", StringArgumentType.greedyString())
                                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(ZoneId.getAvailableZoneIds(), builder))
                                 .executes((ctx) -> changePreferredZone(ctx.getSource(), StringArgumentType.getString(ctx, "zone")))))
+//                .then(literal("health")
+//                        .then(argument("value", FloatArgumentType.floatArg())
+//                                .executes((ctx) -> {
+//                                    if (ctx.getSource().isPlayer()) {
+//                                        ctx.getSource().getPlayer().setHealth(FloatArgumentType.getFloat(ctx,"value"));
+//                                    }
+//                                    return Command.SINGLE_SUCCESS;
+//                                })))
+//                .then(literal("hunger")
+//                        .then(argument("value", StringArgumentType.greedyString())
+//                                .executes((ctx) -> {
+//                                    if (ctx.getSource().isPlayer()) {
+//                                        FoodData foodData = ctx.getSource().getPlayer().getFoodData();
+//                                        String value = StringArgumentType.getString(ctx, "value");
+//                                        String[] hunger = value.replaceAll("[^0-9 ]", "").split(" ");
+//                                        foodData.setFoodLevel(Integer.parseInt(hunger[0]));
+//                                        foodData.setSaturation(Float.parseFloat(hunger[1]));
+//                                    }
+//                                    return Command.SINGLE_SUCCESS;
+//                                })))
+//                .then(literal("xp")
+//                        .then(argument("value", StringArgumentType.greedyString())
+//                                .executes((ctx) -> {
+//                                    if (ctx.getSource().isPlayer()) {
+//                                        ServerPlayer serverPlayer = ctx.getSource().getPlayer();
+//                                        String value = StringArgumentType.getString(ctx, "value");
+//                                        String[] xp = value.replaceAll("[^0-9 ]", "").split(" ");
+//                                        int points = Integer.parseInt(xp[0]);
+//                                        serverPlayer.setExperiencePoints(points);
+//                                        int levels = Integer.parseInt(xp[1]);
+//                                        serverPlayer.setExperienceLevels(levels);
+//                                    }
+//                                    return Command.SINGLE_SUCCESS;
+//                                })))
                 .then(literal("reload")
                         .requires(ctx -> Permissions.check(ctx, "invrestore.reload", 3))
                         .executes((ctx) -> reloadConfig(ctx.getSource()))));
@@ -89,14 +126,16 @@ public class InvRestoreCommand {
 
     private static int sendSnapshots(CommandSourceStack ctx, String playerName, List<Snapshot> snapshots) {
         if (snapshots.isEmpty()) {
+            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("No matching snapshots found"));
             return 0;
         }
 
+        CommandContext.markAsInvRestore();
         ctx.sendSuccess(() -> Component.empty()
-                .append(Component.literal("--- Listing snapshots of ").withStyle(Styles.HEADER_DEFAULT))
-                .append(Component.literal(playerName).withStyle(Styles.HEADER_HIGHLIGHT))
-                .append(" ---").withStyle(Styles.HEADER_DEFAULT),
+                        .append(Component.literal("--- Listing snapshots of ").withStyle(Styles.HEADER_DEFAULT))
+                        .append(Component.literal(playerName).withStyle(Styles.HEADER_HIGHLIGHT))
+                        .append(" ---").withStyle(Styles.HEADER_DEFAULT),
                 false
         );
 
@@ -141,19 +180,54 @@ public class InvRestoreCommand {
                             .append(Component.literal("\n(click to teleport)").withStyle(Styles.LIST_DEFAULT))))
                     .withClickEvent(new ClickEvent.RunCommand(teleportCommand)));
 
+//            float hlth = snapshot.health();
+//            DecimalFormat f = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ROOT));
+//            String healthFormat = "❤" + f.format(hlth);
+//            String healthCommand = "/invrestore health " + hlth;
+//            Component health = Component.literal(healthFormat).withStyle(Styles.LIST_DEFAULT
+//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
+//                            .append(Component.literal(String.valueOf(hlth)).withStyle(Styles.LIST_HIGHLIGHT))
+//                            .append(Component.literal("\nclick to overwrite your own health").withStyle(Styles.LIST_DEFAULT))))
+//                    .withClickEvent(new ClickEvent.RunCommand(healthCommand)));
+
+//            Hunger hngr = snapshot.hunger();
+//            String hungerFormat = "🍖" + hngr.food() + " ❣" + f.format(hngr.saturation());
+//            String hungerCommand = "/invrestore hunger " + hngr.food() + " " + hngr.saturation();
+//            Component hunger = Component.literal(hungerFormat).withStyle(Styles.LIST_DEFAULT
+//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
+//                            .append(Component.literal(snapshot.formatHunger()).withStyle(Styles.LIST_HIGHLIGHT))
+//                            .append(Component.literal("\nclick to overwrite your own hunger").withStyle(Styles.LIST_DEFAULT))))
+//                    .withClickEvent(new ClickEvent.RunCommand(hungerCommand))
+//            );
+
+//            Experience experience = snapshot.xp();
+//            String xpFormat = f.format(experience.points()) + "P " + experience.levels() + "L";
+//            String xpCommand = "/invrestore xp " + experience.points() + " " + experience.levels();
+//            Component xp = Component.literal(xpFormat).withStyle(Styles.LIST_DEFAULT
+//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
+//                            .append(Component.literal(snapshot.formatXp()).withStyle(Styles.LIST_HIGHLIGHT))
+//                            .append(Component.literal("\nclick to overwrite your own xp").withStyle(Styles.LIST_DEFAULT))))
+//                    .withClickEvent(new ClickEvent.RunCommand(xpCommand)));
+
+            CommandContext.markAsInvRestore();
             ctx.sendSuccess(() -> Component.empty()
-                    .append(snapshot.event().formatEmoji(false))
-                    .append(" ").append(time)
-                    .append(" ").append(player)
-                    .append(" ").append(verb)
-                    .append(" ").append(items)
-                    .append(" ").append(position),
+                            .append(snapshot.event().formatEmoji(false))
+                            .append(" ").append(time)
+                            .append(" ").append(player)
+                            .append(" ").append(verb)
+                            .append(" ").append(items)
+                            .append(" ").append(position),
+//                    .append(" ").append(health)
+//                    .append(" (").append(hunger)
+//                    .append(") (").append(xp)
+//                    .append(")"),
                     false
             );
         });
         if (snapshots.size() > 5) {
+            CommandContext.markAsInvRestore();
             ctx.sendSuccess(() -> (Component.literal("and " + (snapshots.size() - 5) + " more...")
-                    .withStyle(Styles.LIST_DEFAULT)),
+                            .withStyle(Styles.LIST_DEFAULT)),
                     false);
         }
         return snapshots.size();
@@ -164,11 +238,13 @@ public class InvRestoreCommand {
                 .findSnapshots(s -> s.id().equals(id))
                 .stream().findAny();
         if (snapshot.isEmpty()) {
+            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Cannot find the snapshot \"" + id + "\""));
             return 0;
         }
         ServerPlayer player = ctx.getPlayer();
         if (player == null) {
+            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Only players can view a snapshot"));
             return 0;
         }
@@ -178,6 +254,7 @@ public class InvRestoreCommand {
             return 1;
         } catch (Exception e) {
             InvRestore.LOGGER.error("Failed to open GUI", e);
+            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Failed to open the snapshot GUI"));
             return 0;
         }
@@ -189,6 +266,7 @@ public class InvRestoreCommand {
             InvRestore.updatePlayerPreferences(ctx.getPlayer(), (old) -> {
                 return old.withTimezone(zoneId);
             });
+            CommandContext.markAsInvRestore();
             ctx.sendSuccess(() -> Component.literal("Updated your timezone preference to " + zoneId), false);
             return 1;
         } catch (DateTimeException e) {
@@ -199,10 +277,12 @@ public class InvRestoreCommand {
     private static int reloadConfig(CommandSourceStack ctx) {
         Optional<InvRestoreConfig> config = InvRestoreConfig.load();
         if (config.isEmpty()) {
+            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Failed to reload the config! Check server console for more info."));
             return 0;
         }
         InvRestore.config = config.get();
+        CommandContext.markAsInvRestore();
         ctx.sendSuccess(() -> Component.literal("Reloaded config!"), false);
         return 1;
     }
