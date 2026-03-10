@@ -10,7 +10,6 @@ import io.github.misode.invrestore.Styles;
 import io.github.misode.invrestore.config.InvRestoreConfig;
 import io.github.misode.invrestore.data.Snapshot;
 import io.github.misode.invrestore.gui.SnapshotGui;
-import io.github.misode.invrestore.util.CommandContext;
 import me.lucko.fabric.api.permissions.v0.Permissions;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -20,7 +19,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -54,7 +53,7 @@ public class InvRestoreCommand {
                                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(InvRestore.getPlayerNames(), builder))
                                 .executes((ctx) -> listPlayerSnapshot(ctx.getSource(), StringArgumentType.getString(ctx, "player")))
                                 .then(argument("type", StringArgumentType.word())
-                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(Snapshot.EventType.REGISTRY.keySet().stream().map(ResourceLocation::getPath), builder))
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(Snapshot.EventType.REGISTRY.keySet().stream().map(Identifier::getPath), builder))
                                         .executes((ctx) -> listPlayerSnapshot(ctx.getSource(), StringArgumentType.getString(ctx, "player"), StringArgumentType.getString(ctx, "type")))
                                 )))
                 .then(literal("view")
@@ -126,16 +125,16 @@ public class InvRestoreCommand {
 
     private static int sendSnapshots(CommandSourceStack ctx, String playerName, List<Snapshot> snapshots) {
         if (snapshots.isEmpty()) {
-            CommandContext.markAsInvRestore();
+            io.github.misode.invrestore.util.CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("No matching snapshots found"));
             return 0;
         }
 
-        CommandContext.markAsInvRestore();
+        io.github.misode.invrestore.util.CommandContext.markAsInvRestore();
         ctx.sendSuccess(() -> Component.empty()
-                        .append(Component.literal("--- Listing snapshots of ").withStyle(Styles.HEADER_DEFAULT))
-                        .append(Component.literal(playerName).withStyle(Styles.HEADER_HIGHLIGHT))
-                        .append(" ---").withStyle(Styles.HEADER_DEFAULT),
+                .append(Component.literal("--- Listing snapshots of ").withStyle(Styles.HEADER_DEFAULT))
+                .append(Component.literal(playerName).withStyle(Styles.HEADER_HIGHLIGHT))
+                .append(" ---").withStyle(Styles.HEADER_DEFAULT),
                 false
         );
 
@@ -172,62 +171,27 @@ public class InvRestoreCommand {
 
             BlockPos pos = BlockPos.containing(snapshot.position());
             String posFormat = pos.getX() + " " + pos.getY() + " " + pos.getZ();
-            String teleportCommand = "/execute in " + snapshot.dimension().location() + " run teleport @s " + snapshot.formatPos();
+            String teleportCommand = "/execute in " + snapshot.dimension().identifier() + " run teleport @s " + snapshot.formatPos();
             Component position = Component.literal(posFormat).withStyle(Styles.LIST_DEFAULT
                     .withHoverEvent(new HoverEvent.ShowText(Component.empty()
                             .append(Component.literal(snapshot.formatPos()).withStyle(Styles.LIST_HIGHLIGHT))
-                            .append(Component.literal("\n" + snapshot.dimension().location()).withStyle(Styles.LIST_DEFAULT))
+                            .append(Component.literal("\n" + snapshot.dimension().identifier()).withStyle(Styles.LIST_DEFAULT))
                             .append(Component.literal("\n(click to teleport)").withStyle(Styles.LIST_DEFAULT))))
                     .withClickEvent(new ClickEvent.RunCommand(teleportCommand)));
 
-//            float hlth = snapshot.health();
-//            DecimalFormat f = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ROOT));
-//            String healthFormat = "❤" + f.format(hlth);
-//            String healthCommand = "/invrestore health " + hlth;
-//            Component health = Component.literal(healthFormat).withStyle(Styles.LIST_DEFAULT
-//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
-//                            .append(Component.literal(String.valueOf(hlth)).withStyle(Styles.LIST_HIGHLIGHT))
-//                            .append(Component.literal("\nclick to overwrite your own health").withStyle(Styles.LIST_DEFAULT))))
-//                    .withClickEvent(new ClickEvent.RunCommand(healthCommand)));
-
-//            Hunger hngr = snapshot.hunger();
-//            String hungerFormat = "🍖" + hngr.food() + " ❣" + f.format(hngr.saturation());
-//            String hungerCommand = "/invrestore hunger " + hngr.food() + " " + hngr.saturation();
-//            Component hunger = Component.literal(hungerFormat).withStyle(Styles.LIST_DEFAULT
-//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
-//                            .append(Component.literal(snapshot.formatHunger()).withStyle(Styles.LIST_HIGHLIGHT))
-//                            .append(Component.literal("\nclick to overwrite your own hunger").withStyle(Styles.LIST_DEFAULT))))
-//                    .withClickEvent(new ClickEvent.RunCommand(hungerCommand))
-//            );
-
-//            Experience experience = snapshot.xp();
-//            String xpFormat = f.format(experience.points()) + "P " + experience.levels() + "L";
-//            String xpCommand = "/invrestore xp " + experience.points() + " " + experience.levels();
-//            Component xp = Component.literal(xpFormat).withStyle(Styles.LIST_DEFAULT
-//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
-//                            .append(Component.literal(snapshot.formatXp()).withStyle(Styles.LIST_HIGHLIGHT))
-//                            .append(Component.literal("\nclick to overwrite your own xp").withStyle(Styles.LIST_DEFAULT))))
-//                    .withClickEvent(new ClickEvent.RunCommand(xpCommand)));
-
-            CommandContext.markAsInvRestore();
             ctx.sendSuccess(() -> Component.empty()
-                            .append(snapshot.event().formatEmoji(false))
-                            .append(" ").append(time)
-                            .append(" ").append(player)
-                            .append(" ").append(verb)
-                            .append(" ").append(items)
-                            .append(" ").append(position),
-//                    .append(" ").append(health)
-//                    .append(" (").append(hunger)
-//                    .append(") (").append(xp)
-//                    .append(")"),
+                    .append(snapshot.event().formatEmoji(false))
+                    .append(" ").append(time)
+                    .append(" ").append(player)
+                    .append(" ").append(verb)
+                    .append(" ").append(items)
+                    .append(" ").append(position),
                     false
             );
         });
         if (snapshots.size() > 5) {
-            CommandContext.markAsInvRestore();
             ctx.sendSuccess(() -> (Component.literal("and " + (snapshots.size() - 5) + " more...")
-                            .withStyle(Styles.LIST_DEFAULT)),
+                    .withStyle(Styles.LIST_DEFAULT)),
                     false);
         }
         return snapshots.size();
@@ -238,13 +202,11 @@ public class InvRestoreCommand {
                 .findSnapshots(s -> s.id().equals(id))
                 .stream().findAny();
         if (snapshot.isEmpty()) {
-            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Cannot find the snapshot \"" + id + "\""));
             return 0;
         }
         ServerPlayer player = ctx.getPlayer();
         if (player == null) {
-            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Only players can view a snapshot"));
             return 0;
         }
@@ -254,7 +216,6 @@ public class InvRestoreCommand {
             return 1;
         } catch (Exception e) {
             InvRestore.LOGGER.error("Failed to open GUI", e);
-            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Failed to open the snapshot GUI"));
             return 0;
         }
@@ -266,7 +227,6 @@ public class InvRestoreCommand {
             InvRestore.updatePlayerPreferences(ctx.getPlayer(), (old) -> {
                 return old.withTimezone(zoneId);
             });
-            CommandContext.markAsInvRestore();
             ctx.sendSuccess(() -> Component.literal("Updated your timezone preference to " + zoneId), false);
             return 1;
         } catch (DateTimeException e) {
@@ -277,12 +237,10 @@ public class InvRestoreCommand {
     private static int reloadConfig(CommandSourceStack ctx) {
         Optional<InvRestoreConfig> config = InvRestoreConfig.load();
         if (config.isEmpty()) {
-            CommandContext.markAsInvRestore();
             ctx.sendFailure(Component.literal("Failed to reload the config! Check server console for more info."));
             return 0;
         }
         InvRestore.config = config.get();
-        CommandContext.markAsInvRestore();
         ctx.sendSuccess(() -> Component.literal("Reloaded config!"), false);
         return 1;
     }

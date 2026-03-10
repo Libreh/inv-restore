@@ -5,22 +5,38 @@ import io.github.misode.invrestore.config.InvRestoreConfig;
 import io.github.misode.invrestore.data.InvRestoreDatabase;
 import io.github.misode.invrestore.data.PlayerPreferences;
 import io.github.misode.invrestore.data.Snapshot;
+import io.github.misode.invrestore.gui.SnapshotGui;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.BundleContents;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemLore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.UUID;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -116,7 +132,7 @@ public class InvRestore implements ModInitializer {
             return 0;
         }
 
-        receiver.sendSystemMessage(Component.empty()
+        receiver.sendSystemMessage(net.minecraft.network.chat.Component.empty()
                 .append(Component.literal("--- Listing snapshots of ").withStyle(Styles.HEADER_DEFAULT))
                 .append(Component.literal(playerName).withStyle(Styles.HEADER_HIGHLIGHT))
                 .append(" ---").withStyle(Styles.HEADER_DEFAULT));
@@ -155,10 +171,39 @@ public class InvRestore implements ModInitializer {
             String posFormat = pos.getX() + " " + pos.getY() + " " + pos.getZ();
             Component position = Component.literal(posFormat).withStyle(Styles.LIST_DEFAULT
                     .withHoverEvent(new HoverEvent.ShowText(Component.empty()
-                            .append(Component.literal(snapshot.formatPos()).withStyle(Styles.LIST_HIGHLIGHT))
+                            .append(net.minecraft.network.chat.Component.literal(snapshot.formatPos()).withStyle(Styles.LIST_HIGHLIGHT))
                             .append(Component.literal("\n" + snapshot.dimension().identifier()).withStyle(Styles.LIST_DEFAULT))
                             .append(Component.literal("\n(click to teleport)").withStyle(Styles.LIST_DEFAULT))))
                     .withClickEvent(new ClickEvent.Custom(InvRestore.TELEPORT_ACTION, Optional.of(snapshotPayload))));
+
+//            float hlth = snapshot.health();
+//            DecimalFormat f = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ROOT));
+//            String healthFormat = "❤" + f.format(hlth);
+//            String healthCommand = "/invrestore health " + hlth;
+//            Component health = Component.literal(healthFormat).withStyle(Styles.LIST_DEFAULT
+//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
+//                            .append(Component.literal(String.valueOf(hlth)).withStyle(Styles.LIST_HIGHLIGHT))
+//                            .append(Component.literal("\nclick to overwrite your own health").withStyle(Styles.LIST_DEFAULT))))
+//                    .withClickEvent(new ClickEvent.RunCommand(healthCommand)));
+
+//            Hunger hngr = snapshot.hunger();
+//            String hungerFormat = "🍖" + hngr.food() + " ❣" + f.format(hngr.saturation());
+//            String hungerCommand = "/invrestore hunger " + hngr.food() + " " + hngr.saturation();
+//            Component hunger = Component.literal(hungerFormat).withStyle(Styles.LIST_DEFAULT
+//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
+//                            .append(Component.literal(snapshot.formatHunger()).withStyle(Styles.LIST_HIGHLIGHT))
+//                            .append(Component.literal("\nclick to overwrite your own hunger").withStyle(Styles.LIST_DEFAULT))))
+//                    .withClickEvent(new ClickEvent.RunCommand(hungerCommand))
+//            );
+
+//            Experience experience = snapshot.xp();
+//            String xpFormat = f.format(experience.points()) + "P " + experience.levels() + "L";
+//            String xpCommand = "/invrestore xp " + experience.points() + " " + experience.levels();
+//            Component xp = Component.literal(xpFormat).withStyle(Styles.LIST_DEFAULT
+//                    .withHoverEvent(new HoverEvent.ShowText(Component.empty()
+//                            .append(Component.literal(snapshot.formatXp()).withStyle(Styles.LIST_HIGHLIGHT))
+//                            .append(Component.literal("\nclick to overwrite your own xp").withStyle(Styles.LIST_DEFAULT))))
+//                    .withClickEvent(new ClickEvent.RunCommand(xpCommand)));
 
             receiver.sendSystemMessage(Component.empty()
                     .append(snapshot.event().formatEmoji(false))

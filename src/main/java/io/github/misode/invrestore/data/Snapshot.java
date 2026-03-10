@@ -20,9 +20,9 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.PlayerAdvancements;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.stats.*;
 import net.minecraft.util.ExtraCodecs;
 import net.minecraft.util.Mth;
@@ -38,6 +38,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import oshi.util.tuples.Pair;
 
+import java.security.Permission;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.Duration;
@@ -185,10 +186,10 @@ public record Snapshot(String id, Event event, UUID playerUuid, String playerNam
         var serverLevel = player.level();
         var commandSourceStack = new CommandSourceStack(
                 CommandSource.NULL,
-                Vec3.atLowerCornerOf(serverLevel.getSharedSpawnPos()),
+                Vec3.atLowerCornerOf(serverLevel.getRespawnData().pos()),
                 Vec2.ZERO,
                 serverLevel,
-                3,
+                PermissionSet.ALL_PERMISSIONS,
                 "Server",
                 Component.literal("Server"),
                 server,
@@ -259,7 +260,7 @@ public record Snapshot(String id, Event event, UUID playerUuid, String playerNam
 
     private <T> void resetStatsForType(ServerPlayer player, StatType<T> statType) {
         Registry<T> registry = statType.getRegistry();
-        for (ResourceLocation id : registry.keySet()) {
+        for (Identifier id : registry.keySet()) {
             T entry = registry.getValue(id);
             if (entry != null) {
                 player.resetStat(statType.get(entry));
