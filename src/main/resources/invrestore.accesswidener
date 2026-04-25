@@ -1,0 +1,12 @@
+accessWidener v2 named
+
+accessible field net/minecraft/server/PlayerAdvancements visible Ljava/util/Set;
+accessible field net/minecraft/server/PlayerAdvancements codec Lcom/mojang/serialization/Codec;
+accessible field net/minecraft/stats/ServerStatsCounter STATS_CODEC Lcom/mojang/serialization/Codec;
+
+accessible method net/minecraft/world/entity/ExperienceOrb tryMergeToExisting (Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/phys/Vec3;I)Z
+accessible method net/minecraft/server/PlayerAdvancements asData ()Lnet/minecraft/server/PlayerAdvancements$Data;
+accessible method net/minecraft/server/PlayerAdvancements applyFrom (Lnet/minecraft/server/ServerAdvancementManager;Lnet/minecraft/server/PlayerAdvancements$Data;)V
+accessible method net/minecraft/stats/ServerRecipeBook apply (Lnet/minecraft/stats/ServerRecipeBook$Packed;)V
+
+accessible class net/minecraft/server/PlayerAdvancements$Data
